@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>RO アイテムデータベース</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Shippori+Mincho:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root,[data-theme="dark"]{
+  --bg:#120b06;--bg2:#1e1108;--bg3:#261507;--bg4:#341c0c;
+  --border:#6b4420;--kafra:#9c2f2a;--kafra-h:#c43d36;--gold:#c8a84b;
+  --label:#e2cd9a;--label-d:#9a7c5a;
+  --ok-bg:#c8e8d4;--ok-fg:#1e4a28;--err-bg:#f0d0cc;--err-fg:#6a1a16;
+  --body-bg:radial-gradient(ellipse at 30% -10%,#4a2f1a 0%,#1b1008 55%,#120b06 100%);
+  --tab-bg:#1a0e06;--th-bg:#341c0c;--th-hv:#4a2810;
+  --row-alt:rgba(255,255,255,.025);--row-hv:rgba(156,47,42,.2);--row-sel:rgba(156,47,42,.4);
+  --pip-on:#3f7d8f;--pip-off:#5c3a22;
+  --wood-a:#8a5a35;--wood-b:#5c3a22;--wood-c:#2b1810;
+  --scr-t:#1a0e06;--scr-b:#5c3a22;
+}
+[data-theme="light"]{
+  --bg:#f5ede0;--bg2:#ede0cc;--bg3:#e4d0b4;--bg4:#d8c09a;
+  --border:#c8a070;--kafra:#9c2f2a;--kafra-h:#c43d36;--gold:#7a4e10;
+  --label:#2a1c10;--label-d:#7a5a38;
+  --ok-bg:#c8e8d4;--ok-fg:#1e4a28;--err-bg:#f0d0cc;--err-fg:#6a1a16;
+  --body-bg:linear-gradient(135deg,#f5ede0 0%,#e8d8c0 100%);
+  --tab-bg:#e4d0b4;--th-bg:#d8c09a;--th-hv:#c8a870;
+  --row-alt:rgba(0,0,0,.04);--row-hv:rgba(156,47,42,.1);--row-sel:rgba(156,47,42,.2);
+  --pip-on:#2f6a7a;--pip-off:#c8a070;
+  --wood-a:#e8c890;--wood-b:#d8b880;--wood-c:#c8a870;
+  --scr-t:#e0d0b8;--scr-b:#c8a070;
+}
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;}
+body{font-family:'Shippori Mincho','Yu Mincho',serif;background:var(--body-bg);color:var(--label);min-height:100vh;}
+.mono{font-family:'JetBrains Mono','Consolas',monospace;}
+
+#app{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+
+/* タイトルバー */
+#titlebar{flex-shrink:0;background:var(--kafra);color:#fbeee4;padding:8px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;}
+#titlebar h1{font-family:'Cinzel',serif;font-size:.95rem;letter-spacing:.06em;}
+.tbtns{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+#theme-btn{padding:5px 10px;border:none;border-radius:5px;cursor:pointer;background:rgba(255,255,255,.2);color:#fbeee4;font-size:.78rem;font-weight:700;font-family:inherit;}
+#theme-btn:hover{background:rgba(255,255,255,.3);}
+
+/* タブ */
+#tabs{flex-shrink:0;display:flex;background:var(--tab-bg);border-bottom:2px solid var(--border);}
+.tab{padding:9px 18px;color:var(--label-d);cursor:pointer;font-size:.82rem;font-weight:700;border-bottom:3px solid transparent;user-select:none;transition:color .15s;}
+.tab:hover{color:var(--label);}
+.tab.active{color:var(--label);border-bottom-color:var(--kafra);}
+
+#main{flex:1;overflow:hidden;display:flex;}
+
+/* 一覧タブ */
+#tab-list{display:flex;width:100%;height:100%;overflow:hidden;}
+#sidebar{width:210px;flex-shrink:0;background:var(--bg3);border-right:1px solid var(--border);overflow-y:auto;padding:12px;}
+#sidebar h3{color:var(--gold);font-family:'Cinzel',serif;font-size:.75rem;letter-spacing:.1em;margin-bottom:10px;}
+.fg{margin-bottom:12px;}
+.fg>label{display:block;color:var(--label-d);font-size:.72rem;margin-bottom:3px;}
+.fg input,.fg select{width:100%;padding:5px 7px;border-radius:4px;font-size:.78rem;font-family:inherit;background:var(--bg4);border:1px solid var(--border);color:var(--label);}
+.fg select{cursor:pointer;}
+.lvrow{display:flex;align-items:center;gap:4px;}
+.lvrow input{width:58px;}
+.lvrow span{color:var(--label-d);font-size:.78rem;}
+#reset-btn{width:100%;padding:6px;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--bg4);color:var(--label);font-size:.75rem;font-weight:700;font-family:inherit;margin-top:2px;}
+#reset-btn:hover{background:var(--border);}
+#item-count{text-align:center;color:var(--label-d);font-size:.72rem;margin-top:8px;}
+
+#list-area{flex:1;overflow:hidden;display:flex;flex-direction:column;}
+#search-bar{flex-shrink:0;display:flex;gap:8px;align-items:center;padding:7px 10px;background:var(--tab-bg);border-bottom:1px solid var(--border);}
+#search-bar input{flex:1;padding:6px 10px;border-radius:5px;font-size:.83rem;font-family:inherit;background:var(--bg3);border:1px solid var(--border);color:var(--label);}
+.sortrow{flex-shrink:0;display:flex;align-items:center;gap:7px;padding:4px 10px;background:var(--tab-bg);border-bottom:1px solid var(--border);}
+.sortrow label{color:var(--label-d);font-size:.72rem;}
+.sortrow select{padding:3px 5px;border-radius:4px;font-size:.72rem;font-family:inherit;background:var(--bg3);border:1px solid var(--border);color:var(--label);}
+#sort-dir{padding:3px 8px;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--bg4);color:var(--label);font-size:.72rem;font-family:inherit;}
+
+#table-wrap{flex:1;overflow:auto;}
+#item-table{width:100%;border-collapse:collapse;font-size:.8rem;}
+#item-table thead th{background:var(--th-bg);color:var(--gold);padding:7px 9px;text-align:left;white-space:nowrap;cursor:pointer;user-select:none;border-bottom:2px solid var(--border);position:sticky;top:0;z-index:1;}
+#item-table thead th:hover{background:var(--th-hv);}
+#item-table thead th.r{text-align:right;}
+#item-table tbody tr{cursor:pointer;}
+#item-table tbody tr:nth-child(even){background:var(--row-alt);}
+#item-table tbody tr:hover{background:var(--row-hv);}
+#item-table tbody tr.sel{background:var(--row-sel);}
+#item-table td{padding:6px 9px;color:var(--label);border-bottom:1px solid rgba(107,68,32,.2);}
+#item-table td.r{text-align:right;font-family:'JetBrains Mono',monospace;font-size:.74rem;}
+#item-table td.nm{font-weight:700;}
+.badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:.68rem;font-weight:700;white-space:nowrap;}
+.pip{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:2px;}
+.pip.on{background:var(--pip-on);}
+.pip.off{background:var(--pip-off);}
+
+#empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;height:100%;color:var(--label-d);text-align:center;}
+#empty-state .icon{font-size:2.5rem;margin-bottom:12px;opacity:.4;}
+#empty-state p{font-size:.83rem;line-height:1.7;max-width:340px;}
+
+/* 詳細タブ */
+#tab-detail{width:100%;overflow-y:auto;padding:14px;background:var(--bg);}
+#det-empty{display:flex;align-items:center;justify-content:center;height:200px;color:var(--label-d);font-size:.85rem;}
+#det-content{display:none;max-width:820px;margin:0 auto;}
+#det-head{background:linear-gradient(135deg,var(--wood-a),var(--wood-b) 50%,var(--wood-c));padding:2px;border-radius:10px;margin-bottom:12px;}
+#det-head-in{background:var(--bg3);border-radius:8px;padding:14px 16px;}
+#det-name{font-size:1.3rem;font-weight:700;margin-bottom:3px;}
+#det-sub{color:var(--label-d);font-size:.82rem;}
+#det-body{display:grid;grid-template-columns:200px 1fr;gap:12px;}
+#stat-panel{background:var(--bg3);border-radius:8px;padding:12px;border:1px solid var(--border);}
+#stat-panel h3{color:var(--gold);font-family:'Cinzel',serif;font-size:.72rem;margin-bottom:8px;letter-spacing:.1em;}
+.sr{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(107,68,32,.2);}
+.sr:last-child{border-bottom:none;}
+.sl{color:var(--label-d);font-size:.74rem;}
+.sv{font-family:'JetBrains Mono',monospace;font-size:.8rem;font-weight:600;}
+#txt-panel{display:flex;flex-direction:column;gap:10px;}
+.ts h3{color:var(--gold);font-family:'Cinzel',serif;font-size:.72rem;margin-bottom:5px;letter-spacing:.1em;}
+.tbox{background:var(--bg3);border-radius:7px;padding:10px 12px;color:var(--label);font-size:.82rem;line-height:1.7;border:1px solid var(--border);min-height:36px;white-space:pre-wrap;}
+
+/* 変換タブ */
+#tab-convert{width:100%;overflow-y:auto;padding:14px;background:var(--bg);}
+.csec{max-width:680px;margin:0 auto 14px;}
+.wcard{background:linear-gradient(155deg,var(--wood-a),var(--wood-b) 45%,var(--wood-c));padding:2px;border-radius:10px;}
+.wcin{background:var(--bg3);border-radius:8px;padding:14px;}
+.csec h2{font-size:.9rem;font-weight:700;margin-bottom:4px;color:var(--label);display:flex;align-items:center;gap:6px;}
+.snum{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--kafra);color:#fbeee4;font-size:.7rem;font-weight:700;}
+.csec p{font-size:.77rem;color:var(--label-d);margin-bottom:8px;line-height:1.6;}
+.csec input[type=file]{width:100%;padding:6px 8px;border-radius:4px;font-size:.77rem;background:var(--bg4);border:1px solid var(--border);color:var(--label);}
+.dlrow{display:flex;gap:7px;margin-top:7px;flex-wrap:wrap;}
+
+/* プログレスバー */
+.prog-wrap{display:none;margin-top:10px;}
+.prog-wrap.show{display:block;}
+.prog-lrow{display:flex;justify-content:space-between;font-size:.72rem;color:var(--label-d);margin-bottom:3px;}
+.prog-track{background:var(--bg4);border-radius:99px;height:9px;overflow:hidden;border:1px solid var(--border);}
+.prog-bar{height:100%;width:0%;background:linear-gradient(90deg,var(--kafra),var(--kafra-h));border-radius:99px;transition:width .2s ease;}
+.prog-step{font-size:.7rem;color:var(--label-d);margin-top:3px;min-height:1em;}
+
+.cst{margin-top:8px;padding:6px 9px;border-radius:4px;font-size:.76rem;display:none;}
+.cst.ok{background:var(--ok-bg);color:var(--ok-fg);display:block;}
+.cst.err{background:var(--err-bg);color:var(--err-fg);display:block;}
+
+.btn{padding:6px 12px;border:none;border-radius:4px;cursor:pointer;font-family:inherit;font-size:.78rem;font-weight:700;}
+.btn-p{background:var(--kafra);color:#fbeee4;}
+.btn-p:hover{background:var(--kafra-h);}
+.btn-s{background:var(--bg4);color:var(--label);border:1px solid var(--border);}
+.btn-s:hover{background:var(--border);}
+.btn:disabled{opacity:.4;cursor:not-allowed;}
+
+#statusbar{flex-shrink:0;background:var(--tab-bg);color:var(--label-d);padding:3px 12px;font-size:.7rem;border-top:1px solid var(--border);}
+
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:var(--scr-t);}
+::-webkit-scrollbar-thumb{background:var(--scr-b);border-radius:3px;}
+
+@media(max-width:600px){#sidebar{display:none;}#det-body{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<div id="app">
+
+<div id="titlebar">
+  <div>
+    <div style="font-family:'Cinzel',serif;letter-spacing:.14em;font-size:.6rem;text-transform:uppercase;opacity:.75">Ragnarok Online</div>
+    <h1>&#9876; アイテムデータベース</h1>
+  </div>
+  <div class="tbtns">
+    <span id="db-fname" style="font-size:.7rem;opacity:.75;"></span>
+    <button id="theme-btn" onclick="toggleTheme()">&#9728; ライトモード</button>
+    <button class="btn btn-p" onclick="document.getElementById('fopen').click()">&#128194; DBを開く</button>
+    <input type="file" id="fopen" accept=".csv,.json" style="display:none" onchange="loadDB(this.files[0])">
+  </div>
+</div>
+
+<div id="tabs">
+  <div class="tab active" onclick="goTab('list')">&#128203; アイテム一覧</div>
+  <div class="tab" onclick="goTab('detail')">&#128269; 詳細</div>
+  <div class="tab" onclick="goTab('convert')">&#128260; 変換ツール</div>
+</div>
+
+<div id="main">
+
+  <div id="tab-list">
+    <div id="sidebar">
+      <h3>絞り込み</h3>
+      <div class="fg"><label>種別</label><select id="f-type" onchange="applyF()"><option value="">すべて</option></select></div>
+      <div class="fg"><label>必要Lv</label>
+        <div class="lvrow">
+          <input type="number" id="f-lmin" placeholder="下限" min="0" oninput="applyF()">
+          <span>〜</span>
+          <input type="number" id="f-lmax" placeholder="上限" min="0" oninput="applyF()">
+        </div>
+      </div>
+      <div class="fg"><label>カード数(スロット)</label>
+        <select id="f-slots" onchange="applyF()">
+          <option value="">すべて</option><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option>
+        </select>
+      </div>
+      <div class="fg"><label>職業(部分一致)</label><input type="text" id="f-job" placeholder="例: ナイト" oninput="applyF()"></div>
+      <button id="reset-btn" onclick="resetF()">絞り込みをリセット</button>
+      <div id="item-count">0 件</div>
+    </div>
+
+    <div id="list-area">
+      <div id="search-bar">
+        <input type="text" id="f-kw" placeholder="&#128269; 名前・効果でキーワード検索" oninput="applyF()">
+      </div>
+      <div class="sortrow">
+        <label>並び順:</label>
+        <select id="sort-k" onchange="applyF()">
+          <option value="name">名前</option><option value="reqLevel">必要Lv</option>
+          <option value="atk">ATK</option><option value="def">DEF</option>
+          <option value="slots">カード数</option><option value="weight">重量</option>
+        </select>
+        <button id="sort-dir" onclick="toggleDir()">&#8593; 昇順</button>
+      </div>
+      <div id="table-wrap">
+        <div id="empty-state">
+          <div class="icon">&#9876;</div>
+          <p>右上「DBを開く」からCSV/JSONを読み込むか<br>「変換ツール」タブでワンクリック取得できます</p>
+        </div>
+        <table id="item-table" style="display:none">
+          <thead><tr>
+            <th onclick="srtBy('id')">ID</th><th onclick="srtBy('name')">名前</th>
+            <th onclick="srtBy('type')">種別</th><th onclick="srtBy('subtype')">詳細種別</th>
+            <th class="r" onclick="srtBy('atk')">ATK</th><th class="r" onclick="srtBy('matk')">MATK</th>
+            <th class="r" onclick="srtBy('def')">DEF</th><th class="r" onclick="srtBy('reqLevel')">必要Lv</th>
+            <th class="r" onclick="srtBy('weaponLevel')">武器Lv</th><th onclick="srtBy('slots')">Slot</th>
+            <th class="r" onclick="srtBy('weight')">重量</th>
+          </tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-detail" style="display:none">
+    <div id="det-empty">アイテム一覧でアイテムをクリックすると詳細が表示されます</div>
+    <div id="det-content">
+      <div id="det-head"><div id="det-head-in">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+          <div><div id="det-name">&#8212;</div><div id="det-sub"></div></div>
+          <div id="det-badge"></div>
+        </div>
+      </div></div>
+      <div id="det-body">
+        <div id="stat-panel"><h3>STATS</h3><div id="stat-rows"></div></div>
+        <div id="txt-panel">
+          <div class="ts"><h3>EFFECT / 効果</h3><div class="tbox" id="d-eff">&#8212;</div></div>
+          <div class="ts"><h3>SET EFFECT / セット効果</h3><div class="tbox" id="d-set">&#8212;</div></div>
+          <div class="ts"><h3>LOCATION / 入手場所</h3><div class="tbox" id="d-loc">&#8212;</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-convert" style="display:none">
+    <div class="csec">
+      <div style="background:linear-gradient(135deg,var(--kafra),#5a1a18);padding:2px;border-radius:10px;">
+        <div style="background:var(--bg3);border-radius:8px;padding:16px;">
+          <h2 style="font-size:.95rem;margin-bottom:6px;">&#9889; ワンクリックで数値データを取得</h2>
+          <p style="color:var(--gold);">rAthena GitHub から ATK・DEF・必要Lv・職業制限・カード数などをダウンロードします。<br>
+          <strong style="color:var(--label);">ファイル準備不要・ボタン1つだけ！</strong>（名前は英語。日本語名は下の手順&#9312;&#12316;&#9314;で追加できます）</p>
+          <button class="btn btn-p" id="auto-btn" onclick="autoDL()" style="font-size:.85rem;padding:9px 18px;">
+            &#9654; rAthenaデータを自動ダウンロードしてDBを開く
+          </button>
+          <div class="prog-wrap" id="pw0">
+            <div class="prog-lrow"><span id="pt0">準備中...</span><span id="pp0">0%</span></div>
+            <div class="prog-track"><div class="prog-bar" id="pb0"></div></div>
+            <div class="prog-step" id="ps0"></div>
+          </div>
+          <div class="cst" id="cst-auto"></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="text-align:center;color:var(--label-d);font-size:.75rem;max-width:680px;margin:0 auto 12px;">&#12288;&#9472;&#9472; 日本語名・効果文も欲しい場合は以下の手順&#9312;&#12316;&#9314;を使ってください &#9472;&#9472;&#12288;</div>
+
+    <div class="csec"><div class="wcard"><div class="wcin">
+      <h2><span class="snum">&#9312;</span> iteminfo.lua &#8594; 日本語名・効果文</h2>
+      <p>GRF Editor の「Lub Decompiler」で書き出した iteminfo.lua / .txt を選んでください。</p>
+      <input type="file" id="f-lua" accept=".lua,.txt" onchange="convLua(this.files[0])">
+      <div class="dlrow">
+        <button class="btn btn-p" id="dl-lua-csv" disabled onclick="dlF('lua-csv')">CSVをDL</button>
+        <button class="btn btn-s" id="dl-lua-json" disabled onclick="dlF('lua-json')">JSONをDL</button>
+        <button class="btn btn-s" id="load-lua" disabled onclick="loadConv('lua')">&#128203; DBに読み込む</button>
+      </div>
+      <div class="cst" id="cst-lua"></div>
+    </div></div></div>
+
+    <div class="csec"><div class="wcard"><div class="wcin">
+      <h2><span class="snum">&#9313;</span> item_db_equip.yml &#8594; 数値データ</h2>
+      <p>rAthena の YMLファイルを選ぶか、下のボタンで GitHub から自動取得できます。</p>
+      <div class="dlrow" style="margin-bottom:8px;">
+        <button class="btn btn-p" id="yml-auto-btn" onclick="autoYml()">&#11015; GitHubから自動DL</button>
+      </div>
+      <div class="prog-wrap" id="pw1">
+        <div class="prog-lrow"><span id="pt1">準備中...</span><span id="pp1">0%</span></div>
+        <div class="prog-track"><div class="prog-bar" id="pb1"></div></div>
+        <div class="prog-step" id="ps1"></div>
+      </div>
+      <input type="file" id="f-yml" accept=".yml,.yaml" multiple onchange="convYml(this.files)">
+      <div class="dlrow">
+        <button class="btn btn-p" id="dl-yml-csv" disabled onclick="dlF('yml-csv')">CSVをDL</button>
+        <button class="btn btn-s" id="dl-yml-json" disabled onclick="dlF('yml-json')">JSONをDL</button>
+        <button class="btn btn-s" id="load-yml" disabled onclick="loadConv('yml')">&#128203; DBに読み込む</button>
+      </div>
+      <div class="cst" id="cst-yml"></div>
+    </div></div></div>
+
+    <div class="csec"><div class="wcard"><div class="wcin">
+      <h2><span class="snum">&#9314;</span> &#9312;と&#9313;を統合（日本語名 + 正確な数値）</h2>
+      <p>ステップ&#9312;&#9313;を実行済みならそのまま使えます。別のJSONがある場合は下からアップロードも可能です。</p>
+      <label style="font-size:.74rem;color:var(--label-d);display:block;margin-bottom:3px">&#9312;のJSONを使う（任意）</label>
+      <input type="file" id="f-aj" accept=".json" style="margin-bottom:8px">
+      <label style="font-size:.74rem;color:var(--label-d);display:block;margin-bottom:3px">&#9313;のJSONを使う（任意）</label>
+      <input type="file" id="f-bj" accept=".json" style="margin-bottom:8px">
+      <div class="dlrow">
+        <button class="btn btn-p" onclick="mergeD()">統合してCSV/JSONを作る</button>
+        <button class="btn btn-s" id="load-merged" disabled onclick="loadConv('merged')">&#128203; 統合データをDBに読み込む</button>
+      </div>
+      <div class="cst" id="cst-merge"></div>
+    </div></div></div>
+  </div>
+
+</div>
+
+<div id="statusbar">準備完了 — CSVまたはJSONファイルを読み込んでください</div>
+</div>
+
+<script>
+'use strict';
+
+/* テーマ */
+function toggleTheme(){
+  const h=document.documentElement;
+  const next=h.getAttribute('data-theme')==='dark'?'light':'dark';
+  h.setAttribute('data-theme',next);
+  document.getElementById('theme-btn').textContent=next==='dark'?'\u2600 ライトモード':'\uD83C\uDF19 ダークモード';
+  try{localStorage.setItem('ro-theme',next);}catch(e){}
+}
+(function(){
+  try{
+    const s=localStorage.getItem('ro-theme');
+    if(s){
+      document.documentElement.setAttribute('data-theme',s);
+      const b=document.getElementById('theme-btn');
+      if(b)b.textContent=s==='dark'?'\u2600 ライトモード':'\uD83C\uDF19 ダークモード';
+    }
+  }catch(e){}
+})();
+
+/* 状態 */
+let allItems=[],filtered=[],sortKey='name',sortAsc=true;
+let dataLua=null,dataYml=null,dataMerged=null;
+
+/* タブ */
+function goTab(n){
+  const ts=['list','detail','convert'];
+  ts.forEach((t,i)=>{
+    document.querySelectorAll('.tab')[i].classList.toggle('active',t===n);
+    const el=document.getElementById('tab-'+t);
+    el.style.display=t===n?(t==='list'?'flex':'block'):'none';
+  });
+}
+
+/* DB読み込み */
+const ALI={
+  'id':'id','ID':'id','名前':'name','name':'name','種別':'type','type':'type',
+  '詳細種別':'subtype','subtype':'subtype','ATK':'atk','atk':'atk','MATK':'matk','matk':'matk',
+  'DEF':'def','def':'def','MDEF':'mdef','mdef':'mdef','重量':'weight','weight':'weight',
+  '必要Lv':'reqLevel','reqLevel':'reqLevel','武器Lv':'weaponLevel','weaponLevel':'weaponLevel',
+  '射程':'range','range':'range','職業制限':'job','job':'job','カード数':'slots','slots':'slots',
+  '属性':'element','element':'element','効果':'effect','effect':'effect',
+  '入手場所':'location','location':'location','セット効果':'setEffect','setEffect':'setEffect',
+  '購入価格':'buy','buy':'buy','売却価格':'sell','sell':'sell',
+  '装備部位':'equipLocation','equipLocation':'equipLocation',
+  'データ元':'dataSource','dataSource':'dataSource','AegisName':'aegisName','aegisName':'aegisName',
+};
+function normR(raw){
+  const o={};
+  for(const[k,v]of Object.entries(raw)){const ck=ALI[k.trim()]||k.trim();o[ck]=typeof v==='string'?v.trim():(v==null?'':String(v));}
+  return o;
+}
+async function loadDB(file){
+  if(!file)return;
+  try{
+    const txt=await file.text();let rows;
+    if(file.name.toLowerCase().endsWith('.json')){const j=JSON.parse(txt);if(!Array.isArray(j))throw new Error('JSON配列形式にしてください');rows=j;}
+    else{rows=Papa.parse(txt,{header:true,skipEmptyLines:true,transformHeader:h=>h.trim()}).data;}
+    allItems=rows.map(normR).filter(it=>it.name);
+    document.getElementById('db-fname').textContent=file.name;
+    refTypes();applyF();setSt('読み込み完了: '+file.name+' ('+allItems.length+'件)');
+  }catch(e){setSt('読み込みエラー: '+e.message);alert('読み込みに失敗しました:\n'+e.message);}
+}
+function loadIntoApp(items){
+  allItems=items.filter(it=>it.name);refTypes();applyF();
+  setSt('データを読み込みました ('+allItems.length+'件)');goTab('list');
+}
+
+/* フィルター */
+function refTypes(){
+  const sel=document.getElementById('f-type');
+  const ts=[...new Set(allItems.map(it=>it.type||'').filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ja'));
+  sel.innerHTML='<option value="">すべて</option>'+ts.map(t=>'<option>'+t+'</option>').join('');
+}
+function applyF(){
+  const kw=(document.getElementById('f-kw').value||'').toLowerCase();
+  const tp=document.getElementById('f-type').value;
+  const lmn=document.getElementById('f-lmin').value;
+  const lmx=document.getElementById('f-lmax').value;
+  const sl=document.getElementById('f-slots').value;
+  const jb=(document.getElementById('f-job').value||'').toLowerCase();
+  let list=allItems.filter(it=>{
+    if(kw){const h=(it.name||'')+(it.effect||'')+(it.subtype||'');if(!h.toLowerCase().includes(kw))return false;}
+    if(tp&&it.type!==tp)return false;
+    if(lmn&&parseFloat(it.reqLevel||0)<parseFloat(lmn))return false;
+    if(lmx&&parseFloat(it.reqLevel||0)>parseFloat(lmx))return false;
+    if(sl!==''&&String(Math.round(parseFloat(it.slots||0)))!==sl)return false;
+    if(jb&&!(it.job||'').toLowerCase().includes(jb))return false;
+    return true;
+  });
+  const NC=new Set(['id','atk','matk','def','mdef','weight','reqLevel','weaponLevel','range','slots','buy','sell']);
+  const isN=NC.has(sortKey);
+  list.sort((a,b)=>{
+    let av=a[sortKey]??'',bv=b[sortKey]??'';
+    if(isN){av=parseFloat(av)||0;bv=parseFloat(bv)||0;return sortAsc?av-bv:bv-av;}
+    return sortAsc?String(av).localeCompare(String(bv),'ja'):String(bv).localeCompare(String(av),'ja');
+  });
+  filtered=list;renderTbl();
+  document.getElementById('item-count').textContent=list.length+' / '+allItems.length+' 件';
+  setSt(list.length+'件 表示中 (全'+allItems.length+'件)');
+}
+function resetF(){
+  ['f-kw','f-lmin','f-lmax','f-job'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('f-type').value='';document.getElementById('f-slots').value='';
+  applyF();
+}
+function srtBy(col){
+  if(sortKey===col){sortAsc=!sortAsc;}else{sortKey=col;sortAsc=true;}
+  document.getElementById('sort-k').value=col;
+  document.getElementById('sort-dir').textContent=sortAsc?'\u2191 昇順':'\u2193 降順';
+  applyF();
+}
+function toggleDir(){
+  sortAsc=!sortAsc;
+  document.getElementById('sort-dir').textContent=sortAsc?'\u2191 昇順':'\u2193 降順';
+  applyF();
+}
+
+/* テーブル */
+const BC=['#9c2f2a','#2f5f6e','#4a6741','#6b3f5c','#9c6b2f','#3f4a5c','#7a3b2e','#2f6e62'];
+const FC=['#f5e9d6','#eaf3f5','#eef3e8','#f3e7ee','#fbf0dc','#e9edf3','#f7e8e0','#e7f5f1'];
+function tc(t){let h=0;for(const c of(t||''))h=(h*31+c.charCodeAt(0))>>>0;return{bg:BC[h%8],fg:FC[h%8]};}
+function pips(n){n=Math.max(0,Math.min(4,Math.round(parseFloat(n)||0)));return Array.from({length:4},(_,i)=>'<span class="pip '+(i<n?'on':'off')+'"></span>').join('');}
+function renderTbl(){
+  const es=document.getElementById('empty-state'),tbl=document.getElementById('item-table');
+  if(!allItems.length){es.style.display='flex';tbl.style.display='none';return;}
+  es.style.display='none';tbl.style.display='table';
+  document.getElementById('tbody').innerHTML=filtered.map((it,i)=>{
+    const c=tc(it.type);
+    const badge=it.type?'<span class="badge" style="background:'+c.bg+';color:'+c.fg+'">'+it.type+'</span>':'';
+    return'<tr onclick="selIt('+i+')">'
+      +'<td class="mono" style="font-size:.7rem">'+(it.id||'')+'</td>'
+      +'<td class="nm">'+(it.name||'')+'</td>'
+      +'<td>'+badge+'</td>'
+      +'<td style="font-size:.75rem;color:var(--label-d)">'+(it.subtype||'')+'</td>'
+      +'<td class="r">'+(it.atk||'')+'</td>'
+      +'<td class="r">'+(it.matk||'')+'</td>'
+      +'<td class="r">'+(it.def||'')+'</td>'
+      +'<td class="r">'+(it.reqLevel||'')+'</td>'
+      +'<td class="r">'+(it.weaponLevel||'')+'</td>'
+      +'<td>'+pips(it.slots)+'</td>'
+      +'<td class="r">'+(it.weight||'')+'</td>'
+      +'</tr>';
+  }).join('');
+}
+
+/* 詳細 */
+function selIt(idx){
+  const it=filtered[idx];if(!it)return;
+  document.querySelectorAll('#tbody tr').forEach((tr,i)=>tr.classList.toggle('sel',i===idx));
+  const c=tc(it.type);
+  document.getElementById('det-name').textContent=it.name||'―';
+  document.getElementById('det-sub').textContent=it.subtype||'';
+  document.getElementById('det-badge').innerHTML=it.type
+    ?'<span class="badge" style="background:'+c.bg+';color:'+c.fg+';font-size:.75rem;padding:3px 10px">'+it.type+'</span>':'';
+  const SD=[['ATK','atk'],['MATK','matk'],['DEF','def'],['MDEF','mdef'],
+    ['重量','weight'],['必要Lv','reqLevel'],['武器Lv','weaponLevel'],['射程','range'],
+    ['カード数','slots'],['属性','element'],['職業制限','job'],['装備部位','equipLocation'],
+    ['購入価格','buy'],['売却価格','sell']];
+  document.getElementById('stat-rows').innerHTML=SD
+    .filter(([,k])=>it[k]!==undefined&&it[k]!=='')
+    .map(([l,k])=>'<div class="sr"><span class="sl">'+l+'</span><span class="sv">'+it[k]+'</span></div>')
+    .join('');
+  document.getElementById('d-eff').textContent=it.effect||'―';
+  document.getElementById('d-set').textContent=it.setEffect||'―';
+  document.getElementById('d-loc').textContent=it.location||'―';
+  document.getElementById('det-empty').style.display='none';
+  document.getElementById('det-content').style.display='block';
+}
+
+/* プログレスバー */
+function setProg(pid,pct,title,step){
+  const w=document.getElementById('pw'+pid);if(!w)return;
+  w.classList.add('show');
+  document.getElementById('pb'+pid).style.width=pct+'%';
+  document.getElementById('pp'+pid).textContent=Math.round(pct)+'%';
+  if(title)document.getElementById('pt'+pid).textContent=title;
+  if(step!==undefined)document.getElementById('ps'+pid).textContent=step;
+}
+function hideProg(pid){const w=document.getElementById('pw'+pid);if(w)w.classList.remove('show');}
+function showSt(id,ok,msg){const el=document.getElementById('cst-'+id);el.className='cst '+(ok?'ok':'err');el.textContent=msg;}
+function setSt(msg){document.getElementById('statusbar').textContent=msg;}
+
+/* rAthena 自動DL */
+const YURLS=['https://raw.githubusercontent.com/rathena/rathena/master/db/re/item_db_equip.yml',
+             'https://raw.githubusercontent.com/rathena/rathena/master/db/re/item_db_usable.yml'];
+const YLABS=['装備品DB (item_db_equip.yml)','消耗品DB (item_db_usable.yml)'];
+
+async function fetchProg(url,label,pid,s0,s1){
+  setProg(pid,s0,'ダウンロード中…',label);
+  const res=await fetch(url);
+  if(!res.ok)throw new Error('ダウンロード失敗 ('+res.status+')');
+  const total=parseInt(res.headers.get('content-length')||'0');
+  const reader=res.body.getReader();const chunks=[];let loaded=0;
+  while(true){
+    const{done,value}=await reader.read();if(done)break;
+    chunks.push(value);loaded+=value.length;
+    const pct=total>0?s0+(loaded/total)*(s1-s0):s0+Math.min(.9,loaded/800000)*(s1-s0);
+    const kb=Math.round(loaded/1024);
+    const info=total>0?label+'  '+kb+'KB / '+Math.round(total/1024)+'KB':label+'  '+kb+'KB 受信中…';
+    setProg(pid,pct,'ダウンロード中…',info);
+  }
+  setProg(pid,s1,'解析中…',label+' — 解析中…');
+  const buf=new Uint8Array(chunks.reduce((a,c)=>a+c.length,0));
+  let pos=0;for(const c of chunks){buf.set(c,pos);pos+=c.length;}
+  return new TextDecoder('utf-8').decode(buf);
+}
+function tKeys(obj){
+  if(obj&&typeof obj==='object'&&!Array.isArray(obj))return Object.entries(obj).filter(([,v])=>v).map(([k])=>k).join(',');
+  return typeof obj==='string'?obj:'';
+}
+function cvYml(body){
+  return(body||[]).filter(Boolean).map(it=>({
+    id:it.Id,name:it.Name||it.AegisName||'',aegisName:it.AegisName||'',
+    type:String(it.Type||''),detailType:it.SubType!=null?String(it.SubType):'',
+    atk:it.Attack,matk:it.MagicAttack,def:it.Defense,weight:it.Weight,
+    reqLevel:it.EquipLevelMin!=null?it.EquipLevelMin:it.EquipLv,
+    weaponLevel:it.WeaponLevel,range:it.Range,
+    job:tKeys(it.Jobs),slots:it.Slots,buy:it.Buy,sell:it.Sell,
+    equipLocation:tKeys(it.Locations),
+  }));
+}
+async function runDL(pid){
+  let all=[];const step=90/YURLS.length;
+  for(let i=0;i<YURLS.length;i++){
+    const txt=await fetchProg(YURLS[i],YLABS[i],pid,i*step,(i+1)*step);
+    setProg(pid,(i+1)*step,'変換中…',YLABS[i]+' — 変換中…');
+    const parsed=jsyaml.load(txt);
+    const body=(parsed&&(parsed.Body||parsed.body))||[];
+    const items=cvYml(body);all=all.concat(items);
+    setProg(pid,(i+1)*step+2,'変換完了',YLABS[i]+' — '+items.length+'件');
+  }
+  return all;
+}
+async function autoDL(){
+  const btn=document.getElementById('auto-btn');
+  btn.disabled=true;btn.textContent='\u23F3 取得中…';
+  setProg(0,0,'接続中…','GitHub に接続しています…');
+  try{
+    const all=await runDL(0);
+    if(!all.length)throw new Error('アイテムが見つかりませんでした');
+    setProg(0,97,'DB構築中…','アイテム一覧を構築しています…');
+    dataYml=all;loadIntoApp(all);
+    setProg(0,100,'完了','');setTimeout(()=>hideProg(0),2500);
+    showSt('auto',true,'\u2714 '+all.length+'件の数値データを取得してDBに読み込みました（名前は英語）');
+    btn.textContent='\u2714 取得完了';
+    ['dl-yml-csv','dl-yml-json','load-yml'].forEach(id=>document.getElementById(id).disabled=false);
+  }catch(e){
+    hideProg(0);showSt('auto',false,'取得に失敗しました: '+e.message);
+    btn.disabled=false;btn.textContent='\u25B6 rAthenaデータを自動ダウンロードしてDBを開く';
+  }
+}
+async function autoYml(){
+  const btn=document.getElementById('yml-auto-btn');
+  btn.disabled=true;btn.textContent='\u23F3 取得中…';
+  setProg(1,0,'接続中…','GitHub に接続しています…');
+  try{
+    const all=await runDL(1);
+    if(!all.length)throw new Error('アイテムが見つかりませんでした');
+    setProg(1,100,'完了','');setTimeout(()=>hideProg(1),2500);
+    dataYml=all;
+    ['dl-yml-csv','dl-yml-json','load-yml'].forEach(id=>document.getElementById(id).disabled=false);
+    showSt('yml',true,'\u2714 '+all.length+'件を取得しました');
+    btn.textContent='\u2714 取得完了';
+  }catch(e){
+    hideProg(1);showSt('yml',false,'取得に失敗しました: '+e.message);
+    btn.disabled=false;btn.textContent='\u2B07 GitHubから自動DL';
+  }
+}
+
+/* iteminfo.lua */
+const SP=[
+  ['atk',/^(?:Attack|ATK|攻撃力)\s*[:：]?\s*([\d,]+)/],
+  ['matk',/^(?:MATK|魔法攻撃力)\s*[:：]?\s*([\d,]+)/],
+  ['def',/^(?:Defense|DEF|防御力)\s*[:：]?\s*([\d,]+)/],
+  ['weight',/^(?:Weight|重量)\s*[:：]?\s*([\d,.]+)/],
+  ['reqLevel',/^(?:Required\s*Level|必要レベル|必要Lv)\s*[:：]?\s*(\d+)/],
+  ['weaponLevel',/^(?:Weapon\s*Level|武器Lv)\s*[:：]?\s*(\d+)/],
+  ['range',/^(?:Range|射程)\s*[:：]?\s*(\d+)/],
+  ['slots',/^(?:Slot|スロット数?|カード数)\s*[:：]?\s*(\d+)/],
+  ['subtype',/^(?:Class|種別)\s*[:：]?\s*(.+)$/],
+  ['job',/^(?:Jobs?|職業)\s*[:：]?\s*(.+)$/],
+];
+function uLua(s){return s.replace(/\\"/g,'"').replace(/\\'/g,"'").replace(/\\\\/g,'\\').replace(/\\n/g,'\n');}
+function fBlks(txt){
+  const out=[],re=/\[\s*(\d+)\s*\]\s*=\s*\{/g;let m;
+  while((m=re.exec(txt))!==null){
+    const id=parseInt(m[1]);let d=0,ins=null,j=m.index+m[0].length-1,n=txt.length;
+    while(j<n){const c=txt[j];if(ins){if(c==='\\'){j+=2;continue;}if(c===ins)ins=null;}
+    else{if(c==='"'||c==="'")ins=c;else if(c==='{')d++;else if(c==='}'){d--;if(d===0){j++;break;}}}j++;}
+    out.push([id,txt.slice(m.index+m[0].length-1,j)]);
+  }
+  return out;
+}
+function eStr(b,f){const m=new RegExp('(?<![A-Za-z])'+f+'\\s*=\\s*"((?:[^"\\\\]|\\\\.)*)"').exec(b);return m?uLua(m[1]).trim():null;}
+function eNum(b,f){const m=new RegExp('(?<![A-Za-z])'+f+'\\s*=\\s*(-?\\d+(?:\\.\\d+)?)').exec(b);return m?m[1]:null;}
+function eLines(b,f){
+  const m=new RegExp('(?<![A-Za-z])'+f+'\\s*=\\s*\\{').exec(b);if(!m)return[];
+  let d=0,ins=null,j=m.index+m[0].length-1,n=b.length;
+  while(j<n){const c=b[j];if(ins){if(c==='\\'){j+=2;continue;}if(c===ins)ins=null;}
+  else{if(c==='"'||c==="'")ins=c;else if(c==='{')d++;else if(c==='}'){d--;if(d===0){j++;break;}}}j++;}
+  const inner=b.slice(m.index+m[0].length-1,j),re2=/"((?:[^"\\]|\\.)*)"/g,lines=[];let sm;
+  while((sm=re2.exec(inner))!==null)lines.push(uLua(sm[1]).replace(/\^[0-9A-Fa-f]{6}/g,'').trim());
+  return lines.filter(Boolean);
+}
+function pLua(txt){
+  const items=[];
+  for(const[id,blk]of fBlks(txt)){
+    const name=eStr(blk,'identifiedDisplayName')||eStr(blk,'unidentifiedDisplayName');
+    if(!name)continue;
+    const sc=eNum(blk,'slotCount');
+    const dl=eLines(blk,'identifiedDescriptionName').length?eLines(blk,'identifiedDescriptionName'):eLines(blk,'unidentifiedDescriptionName');
+    const stats={},lft=[];
+    for(const line of dl){
+      let hit=false;
+      for(const[k,p]of SP){if(k in stats)continue;const m=p.exec(line);if(m){stats[k]=m[1].trim().replace(/,/g,'');hit=true;break;}}
+      if(!hit)lft.push(line);
+    }
+    const nv=k=>stats[k]!==undefined?Number(stats[k]):undefined;
+    items.push({id,name,subtype:stats.subtype||'',atk:nv('atk'),matk:nv('matk'),def:nv('def'),
+      weight:nv('weight'),reqLevel:nv('reqLevel'),weaponLevel:nv('weaponLevel'),range:nv('range'),
+      job:stats.job||'',slots:stats.slots?Number(stats.slots):(sc?Number(sc):undefined),effect:lft.join(' / ')});
+  }
+  return items;
+}
+async function convLua(file){
+  if(!file)return;
+  try{
+    dataLua=pLua(await file.text());
+    if(!dataLua.length)throw new Error('アイテムが見つかりませんでした');
+    ['dl-lua-csv','dl-lua-json','load-lua'].forEach(id=>document.getElementById(id).disabled=false);
+    showSt('lua',true,dataLua.length+'件を変換しました');
+  }catch(e){showSt('lua',false,'変換失敗: '+e.message);}
+}
+async function convYml(files){
+  if(!files||!files.length)return;
+  try{
+    let all=[];
+    for(const f of Array.from(files)){const p=jsyaml.load(await f.text());all=all.concat(cvYml((p&&(p.Body||p.body))||[]));}
+    if(!all.length)throw new Error('アイテムが見つかりませんでした');
+    dataYml=all;
+    ['dl-yml-csv','dl-yml-json','load-yml'].forEach(id=>document.getElementById(id).disabled=false);
+    showSt('yml',true,all.length+'件を変換しました');
+  }catch(e){showSt('yml',false,'変換失敗: '+e.message);}
+}
+
+/* 統合 */
+function fne(...vs){for(const v of vs)if(v!==undefined&&v!==null&&v!=='')return v;return undefined;}
+async function rjson(id){const f=document.getElementById(id).files[0];return f?JSON.parse(await f.text()):null;}
+async function mergeD(){
+  try{
+    const ra=(await rjson('f-bj'))||dataYml;
+    const tx=(await rjson('f-aj'))||dataLua;
+    if(!ra&&!tx)throw new Error('①②のどちらかのデータが必要です');
+    const rM=new Map((ra||[]).map(it=>[Number(it.id),it]));
+    const tM=new Map((tx||[]).map(it=>[Number(it.id),it]));
+    const ids=[...new Set([...rM.keys(),...tM.keys()])].sort((a,b)=>a-b);
+    dataMerged=ids.map(id=>{
+      const r=rM.get(id)||{},t=tM.get(id)||{};
+      return{id,name:fne(t.name,r.name)||'item-'+id,type:r.type||'',
+        subtype:fne(r.detailType,r.subtype,t.subtype)||'',
+        atk:fne(r.atk,t.atk),matk:fne(r.matk,t.matk),def:fne(r.def,t.def),
+        weight:fne(r.weight,t.weight),reqLevel:fne(r.reqLevel,t.reqLevel),
+        weaponLevel:fne(r.weaponLevel,t.weaponLevel),range:fne(r.range,t.range),
+        job:fne(r.job,t.job)||'',slots:fne(r.slots,t.slots),buy:r.buy,sell:r.sell,
+        effect:t.effect||'',
+        dataSource:(rM.has(id)?'rathena':'')+(rM.has(id)&&tM.has(id)?'+':'')+(tM.has(id)?'text':''),
+      };
+    });
+    dlD('merged_items.csv',toCSV(dataMerged),'text/csv');
+    dlD('merged_items.json',JSON.stringify(dataMerged,null,2),'application/json');
+    document.getElementById('load-merged').disabled=false;
+    const both=dataMerged.filter(it=>it.dataSource==='rathena+text').length;
+    showSt('merge',true,dataMerged.length+'件を統合（日本語+数値 両方あり: '+both+'件）');
+  }catch(e){showSt('merge',false,'統合失敗: '+e.message);}
+}
+function loadConv(src){
+  const d=src==='lua'?dataLua:src==='yml'?dataYml:dataMerged;if(d)loadIntoApp(d);
+}
+
+/* CSV出力 */
+const CC=[['id','ID'],['name','名前'],['subtype','詳細種別'],['atk','ATK'],['matk','MATK'],
+  ['def','DEF'],['weight','重量'],['reqLevel','必要Lv'],['weaponLevel','武器Lv'],['range','射程'],
+  ['job','職業制限'],['slots','カード数'],['buy','購入価格'],['sell','売却価格'],
+  ['effect','効果'],['dataSource','データ元']];
+function toCSV(items){return'\uFEFF'+Papa.unparse({fields:CC.map(c=>c[1]),data:items.map(it=>CC.map(([k])=>it[k]??''))});}
+function dlF(t){
+  if(t==='lua-csv')dlD('ro_items.csv',toCSV(dataLua),'text/csv');
+  else if(t==='lua-json')dlD('ro_items.json',JSON.stringify(dataLua,null,2),'application/json');
+  else if(t==='yml-csv')dlD('rathena_items.csv',toCSV(dataYml),'text/csv');
+  else if(t==='yml-json')dlD('rathena_items.json',JSON.stringify(dataYml,null,2),'application/json');
+}
+function dlD(name,content,mime){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([content],{type:mime}));
+  a.download=name;document.body.appendChild(a);a.click();document.body.removeChild(a);
+}
+</script>
+</body>
+</html>
